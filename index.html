@@ -173,14 +173,22 @@
     }
 
     .flame {
+      opacity: 0;
       transform-box: fill-box;
       transform-origin: center bottom;
+      transform: translateY(8px) scale(.35);
+      transition: opacity .35s ease, transform .45s cubic-bezier(.16, 1.3, .36, 1);
+    }
+
+    .scene.is-celebrating .flame {
+      opacity: 1;
+      transform: translateY(0) scale(1);
       animation: flame .52s ease-in-out infinite alternate;
     }
 
-    .flame:nth-of-type(2) { animation-delay: -.18s; }
-    .flame:nth-of-type(3) { animation-delay: -.31s; }
-    .flame:nth-of-type(4) { animation-delay: -.09s; }
+    .scene.is-celebrating .flame:nth-of-type(2) { animation-delay: -.18s; }
+    .scene.is-celebrating .flame:nth-of-type(3) { animation-delay: -.31s; }
+    .scene.is-celebrating .flame:nth-of-type(4) { animation-delay: -.09s; }
 
     .cta {
       display: inline-flex;
@@ -213,6 +221,18 @@
       opacity: .94;
       animation: float 5s ease-in-out infinite;
     }
+
+    .scene.is-celebrating .balloon {
+      animation-name: balloon-launch;
+      animation-duration: 4.4s;
+      animation-timing-function: cubic-bezier(.28, .05, .72, .45);
+      animation-fill-mode: both;
+    }
+
+    .scene.is-celebrating .balloon-left { animation-delay: .1s; }
+    .scene.is-celebrating .balloon-right { animation-delay: .35s; }
+    .scene.is-celebrating .balloon-low-left { animation-delay: .55s; }
+    .scene.is-celebrating .balloon-low-right { animation-delay: .8s; }
 
     .balloon svg { display: block; width: 100%; overflow: visible; }
     .balloon-left { top: 16%; left: 9%; animation-delay: -1.2s; }
@@ -266,6 +286,11 @@
       0%, 100% { transform: translateY(0) rotate(-4deg); }
       50% { transform: translateY(-16px) rotate(4deg); }
     }
+    @keyframes balloon-launch {
+      0% { opacity: .94; transform: translateY(0) rotate(-4deg); }
+      18% { opacity: 1; transform: translateY(-14px) rotate(4deg); }
+      100% { opacity: 0; transform: translateY(-115vh) rotate(-8deg); }
+    }
     @keyframes twinkle {
       0%, 100% { opacity: .35; transform: scale(.78) rotate(0); }
       50% { opacity: 1; transform: scale(1.16) rotate(20deg); }
@@ -306,7 +331,7 @@
   </style>
 </head>
 <body>
-  <main class="scene">
+  <main class="scene" id="scene">
     <header class="topline">
       <div class="brand"><span class="brand-mark" aria-hidden="true">✦</span><span>A DAY TO CELEBRATE</span></div>
       <span class="day-tag">今天，主角是你</span>
@@ -385,12 +410,52 @@
       const canvas = document.getElementById("confetti");
       const context = canvas.getContext("2d");
       const button = document.getElementById("wish-button");
+      const scene = document.getElementById("scene");
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       const colors = ["#ff8eb7", "#ffc28d", "#ffe49b", "#aaa0ff", "#7ddbd0", "#fff5df"];
+      const birthdayNotes = [
+        [392, .32], [392, .32], [440, .64], [392, .64], [523.25, .64], [493.88, .96],
+        [392, .32], [392, .32], [440, .64], [392, .64], [587.33, .64], [523.25, .96],
+        [392, .32], [392, .32], [783.99, .64], [659.25, .64], [523.25, .64], [493.88, .64], [440, .96],
+        [698.46, .32], [698.46, .32], [659.25, .64], [523.25, .64], [587.33, .64], [523.25, 1.1]
+      ];
       let pieces = [];
       let frame = 0;
       let width = 0;
       let height = 0;
+      let audioContext;
+
+      function playBirthdaySong() {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          button.textContent = "浏览器暂不支持播放生日歌";
+          return;
+        }
+
+        audioContext ||= new AudioContextClass();
+        audioContext.resume().then(() => {
+          let startAt = audioContext.currentTime + .08;
+          const beat = .34;
+          for (const [frequency, beats] of birthdayNotes) {
+            const duration = beats * beat;
+            const oscillator = audioContext.createOscillator();
+            const volume = audioContext.createGain();
+            oscillator.type = "triangle";
+            oscillator.frequency.value = frequency;
+            volume.gain.setValueAtTime(.0001, startAt);
+            volume.gain.exponentialRampToValueAtTime(.12, startAt + .025);
+            volume.gain.setValueAtTime(.12, startAt + duration * .72);
+            volume.gain.exponentialRampToValueAtTime(.0001, startAt + duration);
+            oscillator.connect(volume);
+            volume.connect(audioContext.destination);
+            oscillator.start(startAt);
+            oscillator.stop(startAt + duration);
+            startAt += duration + .035;
+          }
+        }).catch(() => {
+          button.textContent = "无法播放生日歌，请检查浏览器声音设置";
+        });
+      }
 
       function resize() {
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -455,11 +520,16 @@
         }
       }, { once: true });
       button.addEventListener("click", event => {
+        if (!scene.classList.contains("is-celebrating")) {
+          scene.classList.add("is-celebrating");
+          button.setAttribute("aria-pressed", "true");
+          button.innerHTML = '<span aria-hidden="true">✦</span> 再听一次生日歌';
+        }
         const bounds = button.getBoundingClientRect();
         const x = event.clientX || bounds.left + bounds.width / 2;
         const y = event.clientY || bounds.top + bounds.height / 2;
         burst(x, y, reduceMotion.matches ? 28 : 150);
-        button.innerHTML = '<span aria-hidden="true">✦</span> 愿你的每一天都闪闪发光';
+        playBirthdaySong();
       });
     })();
   </script>
